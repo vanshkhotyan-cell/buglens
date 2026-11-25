@@ -1,5 +1,5 @@
-import pytest
+import buglens
 
 
-def test_code_is_tested():
-    assert False
+def test_package_imports():
+    assert buglens is not None
