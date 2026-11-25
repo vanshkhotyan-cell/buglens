@@ -35,7 +35,8 @@ requires-python = ">=3.12"
 
 
 [tool.ruff]
-line-length = 99
+line-length = 100
+extension = {mdx = "markdown", qmd = "markdown" }
 src = ["buglens"]
 include = ["pyproject.toml", "buglens/**/*.py"]
 
@@ -46,3 +47,11 @@ extend-select = ["I"]  # Add import sorting
 known-first-party = ["buglens"]
 force-sort-within-sections = true
 
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.7.0",
+]
