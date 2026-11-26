@@ -1,0 +1,17 @@
+{
+  "": "https://githubusercontent.com",
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "package-name": "buglens",
+      "include-component-in-tag": false,
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name==\"buglens\")].version"
+        }
+      ]
+    }
+  }
+}
