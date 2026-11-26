@@ -1,0 +1,19 @@
+stages:
+  prepare:
+    cmd: python -m buglens.dataset
+    deps:
+    - buglens/dataset.py
+    params:
+    - data
+  featurize:
+    cmd: python -m buglens.features
+    deps:
+    - buglens/features.py
+    params:
+    - features
+  train:
+    cmd: python -m buglens.modeling.train
+    deps:
+    - buglens/modeling/train.py
+    params:
+    - train

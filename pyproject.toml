@@ -16,6 +16,8 @@ classifiers = [
     "License :: OSI Approved :: MIT License"
 ]
 dependencies = [
+    "dagshub>=0.7.3",
+    "dvc-s3>=3.3.0",
     "ipython",
     "jupyterlab",
     "loguru",
