@@ -507,6 +507,7 @@ dependencies = [
     { name = "dagshub" },
     { name = "dvc" },
     { name = "dvc-s3" },
+    { name = "fastapi" },
     { name = "ipython" },
     { name = "jupyterlab" },
     { name = "loguru" },
@@ -523,10 +524,12 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "tqdm" },
     { name = "typer" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx" },
     { name = "pre-commit" },
 ]
 
@@ -535,6 +538,7 @@ requires-dist = [
     { name = "dagshub", specifier = ">=0.7.3" },
     { name = "dvc", specifier = ">=3.67.1" },
     { name = "dvc-s3", specifier = ">=3.3.0" },
+    { name = "fastapi", specifier = ">=0.165.0" },
     { name = "ipython" },
     { name = "jupyterlab" },
     { name = "loguru" },
@@ -551,10 +555,14 @@ requires-dist = [
     { name = "scikit-learn" },
     { name = "tqdm" },
     { name = "typer" },
+    { name = "uvicorn", specifier = ">=0.54.0" },
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pre-commit", specifier = ">=4.7.0" }]
+dev = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pre-commit", specifier = ">=4.7.0" },
+]
 
 [[package]]
 name = "cachetools"
