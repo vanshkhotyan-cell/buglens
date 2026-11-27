@@ -1,8 +1,8 @@
-data:
+﻿prepare:
   seed: 42
-  test_size: 0.2
-features:
-  max_ast_depth: 12
-train:
-  epochs: 3
-  learning_rate: 2.0e-05
+  cal_size: 0.15
+  test_size: 0.15
+
+evaluate:
+  eps: 0.08
+  target_precision: 0.90
