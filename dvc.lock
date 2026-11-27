@@ -1,0 +1,63 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python -m buglens.pipeline prepare
+    deps:
+    - path: buglens/dataset.py
+      hash: md5
+      md5: 9eca8a99d743a3440c23e1891af95da0
+      size: 7570
+    - path: buglens/pipeline.py
+      hash: md5
+      md5: 99602d703a856f7860e0d823267323bf
+      size: 8219
+    params:
+      params.yaml:
+        prepare.cal_size: 0.15
+        prepare.seed: 42
+        prepare.test_size: 0.15
+    outs:
+    - path: data/processed/cal.csv
+      hash: md5
+      md5: 002e6c9f395828875571e9dec89f9578
+      size: 2317
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 1393bc2dedc4d2036b88a3e6ec47fd39
+      size: 2597
+    - path: data/processed/train.csv
+      hash: md5
+      md5: daf563e07e49d1d72a97bab2b7f9b93f
+      size: 10954
+  evaluate:
+    cmd: python -m buglens.pipeline evaluate
+    deps:
+    - path: buglens/evaluation.py
+      hash: md5
+      md5: 71ebe5a73f419f7cc712d2519ef6401e
+      size: 4038
+    - path: buglens/modeling/fusion.py
+      hash: md5
+      md5: 7ef5ad45964b2d3a047303132c30ab20
+      size: 10159
+    - path: buglens/pipeline.py
+      hash: md5
+      md5: 99602d703a856f7860e0d823267323bf
+      size: 8219
+    - path: data/processed/cal.csv
+      hash: md5
+      md5: 002e6c9f395828875571e9dec89f9578
+      size: 2317
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 1393bc2dedc4d2036b88a3e6ec47fd39
+      size: 2597
+    params:
+      params.yaml:
+        evaluate.eps: 0.08
+        evaluate.target_precision: 0.9
+    outs:
+    - path: reports/metrics.json
+      hash: md5
+      md5: d3ed0b47775d2c27f7b40b71f1d41021
+      size: 290

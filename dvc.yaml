@@ -1,19 +1,29 @@
-stages:
+﻿stages:
   prepare:
-    cmd: python -m buglens.dataset
+    cmd: python -m buglens.pipeline prepare
     deps:
-    - buglens/dataset.py
+      - buglens/dataset.py
+      - buglens/pipeline.py
     params:
-    - data
-  featurize:
-    cmd: python -m buglens.features
+      - prepare.seed
+      - prepare.cal_size
+      - prepare.test_size
+    outs:
+      - data/processed/train.csv
+      - data/processed/cal.csv
+      - data/processed/test.csv
+
+  evaluate:
+    cmd: python -m buglens.pipeline evaluate
     deps:
-    - buglens/features.py
+      - buglens/evaluation.py
+      - buglens/modeling/fusion.py
+      - buglens/pipeline.py
+      - data/processed/cal.csv
+      - data/processed/test.csv
     params:
-    - features
-  train:
-    cmd: python -m buglens.modeling.train
-    deps:
-    - buglens/modeling/train.py
-    params:
-    - train
+      - evaluate.eps
+      - evaluate.target_precision
+    metrics:
+      - reports/metrics.json:
+          cache: false
