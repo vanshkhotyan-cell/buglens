@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from uuid import uuid4
 
 import streamlit as st
 
+from buglens.pedagogy.bkt_tracer import DEFAULT_DB, MisconceptionTracer
 from buglens.pedagogy.diagnostic_adapter import diagnose, log_coverage_gap, observe
 from buglens.pedagogy.diagnostic_fixtures import CASES
 from buglens.pedagogy.remediation import build_lesson
+from buglens.pedagogy.review_queue import classify, review_queue
 
 st.set_page_config(page_title="BugLens · InferenceX", page_icon="🔍", layout="wide")
 
@@ -32,7 +37,7 @@ TEMPLATES = [
     "Bracket subtraction",
     "Equation",
 ]
-PAGES = ["Mathematical workspace", "Reasoning review", "Practice & reflection"]
+PAGES = ["Mathematical workspace", "Reasoning review", "Practice & reflection", "Learner profile"]
 s = st.session_state
 
 st.html(Path(__file__).with_name("workspace.css"))
@@ -181,6 +186,7 @@ def workspace():
         ):
             # Raw handoff for a future parser. Only authored or integer-built LaTeX is rendered.
             s.submission = {
+                "id": uuid4().hex,
                 "source": source,
                 "topic": topic,
                 "question": raw,
@@ -303,6 +309,10 @@ def practice():
         if lesson:
             st.write(lesson.family.reflection)
     with st.container(border=True, key="response_card"):
+        if lesson and lesson.replay and "learner" in s:
+            st.caption(
+                "Your first saved answer counts toward learner memory. Use a number, fraction or expanded polynomial."
+            )
         answer = field(st.text_input, "Practice answer", "answer", "", practice=True, max_chars=300)
         explanation = field(
             st.text_area,
@@ -318,6 +328,16 @@ def practice():
             type="primary",
             disabled=not (answer.strip() and explanation.strip()) or "reflection" in s,
         ):
+            if lesson and lesson.replay and "learner" in s:
+                store().observe(
+                    s.learner,
+                    s.memory_session,
+                    lesson.family.replay_id,
+                    sub["id"],
+                    classify(lesson.practice, answer),
+                    kind="practice",
+                    completed=True,
+                )
             s.reflection = {
                 "question_latex": latex,
                 "answer": answer.strip(),
@@ -434,6 +454,125 @@ def judge():
             st.caption("ABSTAIN · targeted teaching withheld.")
 
 
+def store():
+    if "memory_store" not in s:
+        s.memory_store = MisconceptionTracer(os.environ.get("BUGLENS_LEARNER_DB", DEFAULT_DB))
+    return s.memory_store
+
+
+def attach(db, learner):
+    invalidate()
+    s.learner = learner
+    s.memory_session = uuid4().hex
+    db.start_session(learner, s.memory_session)
+
+
+def memory_panel(db, learner, session, prefix):
+    prior = db.prior(learner)
+    events = db.history(learner)
+    sessions = db.sessions(learner)
+    older = next(
+        (item for i, item in enumerate(sessions) if i and sessions[i - 1]["id"] == session), None
+    )
+    st.caption(f"Previous session (UTC) · {older['started'] if older else 'First session'}")
+    st.table(
+        [
+            {"Family": family, "Estimated active probability": f"{p:.1%}"}
+            for family, p in prior.active.items()
+        ]
+    )
+    attempts = [e for e in events if e["kind"] in ("practice", "diagnostic", "review")]
+    learned = sum(e["kind"] == "learn" for e in events)
+    verified = sum(e["evidence"] in ("bug", "correct") for e in attempts)
+    st.write(
+        f"{len(attempts)} recorded attempts · {verified} classified responses · "
+        f"{learned} completed remediations"
+    )
+    if events:
+        with st.expander("Recent probability changes"):
+            st.table(
+                [
+                    {k: e[k] for k in ("created", "family", "kind", "evidence", "before", "after")}
+                    for e in events[:20]
+                ]
+            )
+    st.subheader("Spaced review")
+    queue = review_queue(db, learner, session)
+    if not queue:
+        st.caption("No recently remediated families are due this session.")
+        return
+    item = queue[0]
+    st.caption("Due families · " + ", ".join(q.family for q in queue))
+    st.latex(item.example.question)
+    key = f"{prefix}_{session}_{item.family}"
+    response = st.text_input("Review answer", key=key, max_chars=100)
+    st.caption("Use a number, fraction or expanded polynomial such as x^2+8x+16.")
+    if st.button("Submit review", key=key + "_submit", disabled=not response.strip()):
+        db.observe(
+            learner, session, item.family, key, classify(item.example, response), kind="review"
+        )
+        st.rerun()
+
+
+def profile():
+    st.title("Learner profile")
+    st.caption(
+        "Model estimates use provisional BKT parameters. Mastery and predictive accuracy have not been validated."
+    )
+    db = store()
+    if "learner" not in s:
+        if st.button("Create anonymous profile"):
+            attach(db, db.create_learner())
+            st.rerun()
+        code = st.text_input(
+            "Resume with your private anonymous learner ID", type="password", max_chars=32
+        )
+        if st.button("Resume profile", disabled=not code):
+            if db.prior(code).active:
+                attach(db, code)
+                st.rerun()
+            st.warning("Learner ID unavailable.")
+    else:
+        st.caption("Private anonymous learner ID · Save this ID to resume in another session.")
+        st.code(s.learner)
+        st.caption(
+            "Learner history uses verified live lesson matches and classified practice or review responses. Live replay and neural inference are currently unavailable."
+        )
+        memory_panel(db, s.learner, s.memory_session, "live")
+        confirmed_delete = st.checkbox("I confirm deletion of this learner's stored history")
+        if st.button("Clear learner data", disabled=not confirmed_delete):
+            db.clear_learner(s.learner, confirmed=confirmed_delete)
+            s.clear()
+            st.rerun()
+    with st.expander("Demonstration-only learner memory"):
+        st.caption("Scripted fraction and equation attempts in a separate temporary database.")
+        if "demo_memory" not in s:
+            if st.button("Load demonstration history"):
+                directory = TemporaryDirectory()
+                demo = MisconceptionTracer(Path(directory.name) / "demo.db")
+                learner = demo.create_learner()
+                demo.start_session(learner, "lesson")
+                for family in ("fraction_add", "transposition_sign"):
+                    demo.observe(learner, "lesson", family, family, "bug")
+                    demo.observe(
+                        learner,
+                        "lesson",
+                        family,
+                        family,
+                        "correct",
+                        kind="practice",
+                        completed=True,
+                    )
+                demo.start_session(learner, "review")
+                s.demo_memory = directory, learner
+                st.rerun()
+        else:
+            directory, learner = s.demo_memory
+            memory_panel(
+                MisconceptionTracer(Path(directory.name) / "demo.db"), learner, "review", "demo"
+            )
+
+
 with st.sidebar:
     st.html('<div class="brand"><i aria-hidden="true"></i>BugLens</div>')
     st.caption("Mathematical diagnostic tutor")
@@ -450,5 +589,16 @@ if "submission" in s and "replay_outputs" in s and "diagnosis" not in s:
         s.diagnosis = result.decision
         s.probe = result.selected
 
-{PAGES[0]: workspace, PAGES[1]: review, PAGES[2]: practice}[page]()
+if "learner" in s:
+    if not store().prior(s.learner).active:
+        s.clear()
+        st.rerun()
+    if "submission" in s and s.get("diagnosis"):
+        lesson = build_lesson(s.submission["question"], s.diagnosis)
+        if lesson and lesson.replay:
+            store().observe(
+                s.learner, s.memory_session, lesson.family.replay_id, s.submission["id"], "bug"
+            )
+
+{PAGES[0]: workspace, PAGES[1]: review, PAGES[2]: practice, PAGES[3]: profile}[page]()
 judge()
