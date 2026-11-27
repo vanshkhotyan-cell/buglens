@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -37,7 +38,13 @@ TEMPLATES = [
     "Bracket subtraction",
     "Equation",
 ]
-PAGES = ["Mathematical workspace", "Reasoning review", "Practice & reflection", "Learner profile"]
+PAGES = [
+    "Mathematical workspace",
+    "Reasoning review",
+    "Practice & reflection",
+    "Learner profile",
+    "Research analytics",
+]
 s = st.session_state
 
 st.html(Path(__file__).with_name("workspace.css"))
@@ -573,6 +580,69 @@ def profile():
             )
 
 
+def research():
+    st.title("Research analytics")
+    st.caption("Phase 5 · Simulated learner study")
+    directory = Path(__file__).resolve().parents[1] / "reports" / "simulation"
+    try:
+        report = json.loads((directory / "summary.json").read_text())
+    except (OSError, ValueError):
+        st.info("Simulation results unavailable. Generate the study outputs to view this page.")
+        return
+    cfg = report["config"]
+    scenario = st.selectbox("Simulation scenario", list(cfg["scenarios"]))
+    st.write(
+        f"{cfg['cohort']} learners per group per seed · {len(cfg['seeds'])} seeds · "
+        f"{cfg['sessions']} sessions · {cfg['budget']} activity slots per active session"
+    )
+    st.write(
+        "Each group starts with copies of the same learners. Probes use a slot. "
+        "Practice and review use the same learning probability in both active groups."
+    )
+    rows = [r for r in report["groups"] if r["scenario"] == scenario]
+    st.dataframe(
+        [
+            {
+                "Group": r["group"],
+                "Pre-test": r["pre_mean"],
+                "Post-test": r["post_mean"],
+                "Mean normalized gain": r["gain_mean"],
+                "Error recurrence": r["recurrence"],
+                "Median sessions to first resolution": r["median_resolution_session"],
+                "Restricted mean sessions": r["restricted_mean_sessions"],
+                "Initially active": r["initial"],
+                "Censored": r["censored"],
+            }
+            for r in rows
+        ],
+        hide_index=True,
+    )
+    st.caption(
+        "Censored families stayed active through the final session. A blank median means "
+        "fewer than half reached first resolution. Later relapse is possible."
+    )
+    with st.expander("Model assumptions and paired differences"):
+        st.json(
+            {"population": cfg["scenarios"][scenario], "tutor": cfg["tutor"], "seeds": cfg["seeds"]}
+        )
+        st.dataframe([r for r in report["contrasts"] if r["scenario"] == scenario], hide_index=True)
+    for name, caption in (
+        ("gain_mean", "Mean normalized gain and 95% learner-bootstrap intervals"),
+        ("recurrence", "Fraction of pre-test errors repeated on the post-test"),
+        ("curve", "Time to first resolution across all scenarios"),
+    ):
+        chart = directory / f"{name}.png"
+        if chart.is_file():
+            st.image(str(chart), caption=caption)
+        else:
+            st.info(f"Visualization unavailable · {caption}")
+    st.write(
+        "These simulations cannot establish educational efficacy. Binary responses approximate "
+        "student work. The model omits differences in item difficulty and individual responses "
+        "to explanations. Live symbolic replay and neural diagnosis remain integration work."
+    )
+
+
 with st.sidebar:
     st.html('<div class="brand"><i aria-hidden="true"></i>BugLens</div>')
     st.caption("Mathematical diagnostic tutor")
@@ -600,5 +670,8 @@ if "learner" in s:
                 s.learner, s.memory_session, lesson.family.replay_id, s.submission["id"], "bug"
             )
 
-{PAGES[0]: workspace, PAGES[1]: review, PAGES[2]: practice, PAGES[3]: profile}[page]()
-judge()
+{PAGES[0]: workspace, PAGES[1]: review, PAGES[2]: practice, PAGES[3]: profile, PAGES[4]: research}[
+    page
+]()
+if page != PAGES[4]:
+    judge()
