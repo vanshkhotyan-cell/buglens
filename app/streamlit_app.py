@@ -6,6 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from buglens.pedagogy.remediation import build_lesson
 from buglens.schemas import DiagnosisDecision, ProbeCandidate
 
 st.set_page_config(page_title="BugLens · InferenceX", page_icon="🔍", layout="wide")
@@ -41,7 +42,17 @@ def navigate(page):
 
 
 def invalidate():
-    for key in ("submission", "diagnosis", "probe", "reflection", "answer", "explanation"):
+    for key in (
+        "submission",
+        "diagnosis",
+        "probe",
+        "reflection",
+        "answer",
+        "explanation",
+        "input_answer",
+        "input_explanation",
+        "practice_context",
+    ):
         s.pop(key, None)
 
 
@@ -188,22 +199,56 @@ def review():
     st.title("Reasoning review")
     if not confirmed():
         return
+    sub = s.submission
+    lesson = build_lesson(sub["question"], s.get("diagnosis"))
     with st.container(key="math_canvas"):
-        st.subheader("Cognitive conflict")
-        st.caption("A targeted counterexample will appear here when remediation is connected.")
-        sub = s.submission
-        if sub["latex"]:
-            st.latex(sub["latex"])
+        st.subheader("Dissatisfaction · Test the rule")
+        if lesson:
+            if lesson.replay is None:
+                st.info(
+                    "Demonstration fixture · This worked example illustrates a common rule error. Your attempt has no live diagnosis."
+                )
+            st.caption("Try both rules on this counterexample. Which result fits the question?")
+            st.latex(lesson.anchor.question)
+            wrong, correct = st.columns(2)
+            wrong.caption("Misconception prediction")
+            wrong.latex(lesson.anchor.wrong)
+            correct.caption("Verified calculation")
+            correct.latex(lesson.anchor.steps)
         else:
-            st.code(sub["question"], language=None, wrap_lines=True)
+            st.info("Targeted remediation is unavailable for this submission.")
+            if sub["latex"]:
+                st.latex(sub["latex"])
+            else:
+                st.code(sub["question"], language=None, wrap_lines=True)
     left, right = st.columns(2)
     with left.container(border=True):
-        st.subheader("Incorrect reasoning")
-        st.caption("Submitted working · error identification pending")
+        st.subheader("Your submitted working")
         st.code(sub["attempt"], language=None, wrap_lines=True)
+        if lesson and lesson.replay:
+            st.caption("Live replay · matched incorrect reasoning")
+            for step in lesson.replay.trace_steps:
+                st.text(step)
+            st.latex(lesson.replay.predicted_latex)
+        elif lesson:
+            st.caption("Demonstration fixture · sample incorrect reasoning")
+            st.write(lesson.family.mistake)
+            st.latex(lesson.original.wrong)
+            if lesson.original.value == lesson.original.wrong_value:
+                st.caption(
+                    "Both rules give the same answer here. The counterexample above separates them."
+                )
     with right.container(border=True):
         st.subheader("Corrected reasoning")
-        st.caption("Verified reasoning steps pending remediation integration.")
+        if lesson:
+            st.caption("Intelligibility · Why the rule works")
+            st.write(lesson.family.rule)
+            st.caption("Plausibility · Check the original problem")
+            st.latex(lesson.original.steps)
+        else:
+            st.caption(
+                "A verified correction requires a supported question and an eligible teaching decision when a diagnosis is available."
+            )
     st.button("Continue to practice", type="primary", on_click=navigate, args=(PAGES[2],))
 
 
@@ -211,15 +256,29 @@ def practice():
     st.title("Practice & reflection")
     if not confirmed():
         return
-    # Free-entry questions have no inferred topic. Offer a labeled general exercise.
-    topic = s.submission["topic"]
-    if topic not in BANK:
-        topic = "Fraction addition"
-    with st.container(key="math_canvas"):
-        st.caption(f"Curated practice · {topic} · adaptive selection pending")
+    sub = s.submission
+    lesson = build_lesson(sub["question"], s.get("diagnosis"))
+    if lesson:
+        latex = lesson.practice.question
+        prompt = "Try this question using the same rule."
+        label = (
+            "Targeted practice" if lesson.replay else "Demonstration fixture · targeted practice"
+        )
+    else:
+        topic = sub["topic"] if sub["topic"] in BANK else "Fraction addition"
         prompt, _, _, latex = BANK[topic]
+        label = "General practice · no targeted lesson available"
+    context = (sub["question"], sub["attempt"], label, latex)
+    if s.get("practice_context") != context:
+        for key in ("answer", "explanation", "input_answer", "input_explanation", "reflection"):
+            s.pop(key, None)
+        s.practice_context = context
+    with st.container(key="math_canvas"):
+        st.caption(f"Fruitfulness · {label}")
         st.subheader(prompt)
         st.latex(latex)
+        if lesson:
+            st.write(lesson.family.reflection)
     with st.container(border=True, key="response_card"):
         answer = field(st.text_input, "Practice answer", "answer", "", practice=True, max_chars=300)
         explanation = field(
@@ -244,6 +303,9 @@ def practice():
             st.rerun()
         if "reflection" in s:
             st.success("Answer and self-explanation saved for this session.")
+            if lesson:
+                st.caption("Compare your reasoning with the verified solution.")
+                st.latex(lesson.practice.steps)
 
 
 def judge(decision: DiagnosisDecision | None, probe: ProbeCandidate | None):
