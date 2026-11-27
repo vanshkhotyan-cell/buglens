@@ -6,8 +6,9 @@ from pathlib import Path
 
 import streamlit as st
 
+from buglens.pedagogy.diagnostic_adapter import diagnose, log_coverage_gap, observe
+from buglens.pedagogy.diagnostic_fixtures import CASES
 from buglens.pedagogy.remediation import build_lesson
-from buglens.schemas import DiagnosisDecision, ProbeCandidate
 
 st.set_page_config(page_title="BugLens · InferenceX", page_icon="🔍", layout="wide")
 
@@ -46,6 +47,11 @@ def invalidate():
         "submission",
         "diagnosis",
         "probe",
+        "assessment",
+        "replay_outputs",
+        "probe_bank",
+        "demo_case",
+        "demo_result",
         "reflection",
         "answer",
         "explanation",
@@ -181,6 +187,8 @@ def workspace():
                 "latex": latex,
                 "attempt": attempt,
             }
+            if build_lesson(raw) is None:
+                log_coverage_gap()
             st.rerun()
         if "submission" in s:
             st.success("Attempt confirmed for this session.")
@@ -200,7 +208,21 @@ def review():
     if not confirmed():
         return
     sub = s.submission
-    lesson = build_lesson(sub["question"], s.get("diagnosis"))
+    decision = s.get("diagnosis")
+    lesson = build_lesson(sub["question"], decision)
+    if decision and decision.action == "PROBE":
+        st.subheader("Follow-up question")
+        probe = s.get("probe")
+        if probe:
+            st.latex(probe.question_latex)
+            if s.get("assessment") and s.assessment.selected:
+                response_controls(s.assessment, demo=False)
+            else:
+                st.caption("Response likelihoods unavailable.")
+        else:
+            st.info("A follow-up is needed. A verified probe is unavailable.")
+    elif decision and decision.action == "ABSTAIN":
+        st.info("Targeted teaching is unavailable because the diagnostic policy abstained.")
     with st.container(key="math_canvas"):
         st.subheader("Dissatisfaction · Test the rule")
         if lesson:
@@ -257,7 +279,8 @@ def practice():
     if not confirmed():
         return
     sub = s.submission
-    lesson = build_lesson(sub["question"], s.get("diagnosis"))
+    decision = s.get("diagnosis")
+    lesson = build_lesson(sub["question"], decision)
     if lesson:
         latex = lesson.practice.question
         prompt = "Try this question using the same rule."
@@ -308,18 +331,107 @@ def practice():
                 st.latex(lesson.practice.steps)
 
 
-def judge(decision: DiagnosisDecision | None, probe: ProbeCandidate | None):
+def response_controls(result, *, demo):
+    probe = result.selected
+    prefix = "demo" if demo else "confirmed"
+    answer = next(iter(probe.expected_answers.values()))
+    for matched, label in ((True, f"Matches {answer}"), (False, "Other response")):
+        if st.button(label, key=f"{prefix}_{probe.template_id}_{matched}"):
+            updated = observe(result, probe.template_id, matched)
+            if demo:
+                s.demo_result = updated
+            else:
+                s.assessment = updated
+                s.diagnosis = updated.decision
+                s.probe = updated.selected
+            st.rerun()
+
+
+def metrics(decision, result, probe):
+    if decision is None:
+        st.caption("Posterior, maximum probability, Shannon entropy, EIG and policy unavailable.")
+        return
+    st.markdown("**Posterior probabilities**")
+    st.json(decision.posterior)
+    maximum, entropy, policy = st.columns(3)
+    maximum.metric(
+        "Maximum posterior",
+        max(decision.posterior.values()) if decision.posterior else "Unavailable",
+    )
+    entropy.metric("Shannon entropy (bits)", decision.entropy_bits)
+    policy.metric("Selected policy", decision.action)
+    if result and result.candidates:
+        st.table(
+            [{"Candidate": p.template_id, "EIG (bits)": p.eig_bits} for p in result.candidates]
+        )
+    elif probe:
+        st.metric("Supplied probe EIG (bits)", probe.eig_bits)
+    else:
+        st.caption("Candidate EIG scores unavailable.")
+    st.markdown("**Probe history**")
+    if result and result.history:
+        for item in result.history:
+            st.caption(
+                f"{item.template_id} · {'matched predicted answer' if item.matched else 'other response'}"
+            )
+            st.table(
+                [
+                    {"Class": c, "Before": p, "After": item.after[c], "Change": item.after[c] - p}
+                    for c, p in item.before.items()
+                ]
+            )
+    else:
+        st.caption("No recorded observations. Posterior changes unavailable.")
+
+
+def judge():
     with st.expander("Under the Hood · Judge console"):
-        st.caption("Evidence for the confirmed attempt")
-        st.markdown("**Posterior probabilities**")
-        if decision:
-            st.json(decision.posterior)
+        st.caption("Confirmed attempt · live diagnostic handoff")
+        metrics(s.get("diagnosis"), s.get("assessment"), s.get("probe"))
+        st.divider()
+        case = st.selectbox("Contract demonstration", ["Off", *CASES], key="demo_case")
+        if case == "Off":
+            s.pop("demo_result", None)
+            s.pop("active_case", None)
+            return
+        question, answer, replays, bank = CASES[case]
+        if case != s.get("active_case") or "demo_result" not in s:
+            s.demo_result = diagnose(replays, bank)
+            s.active_case = case
+        result = s.demo_result
+        st.info("Contract fixture · simulated evidence for a separate worked example.")
+        st.write(f"Fixture question: {question} · Scripted answer: {answer}")
+        st.caption("Inputs · uniform prior, scripted replay and binary probe likelihoods")
+        st.json(
+            {
+                "replay": [r.model_dump() for r in replays],
+                "match_likelihood_by_class": {
+                    p.template_id: dict(
+                        zip(result.decision.posterior, p.match_likelihood, strict=True)
+                    )
+                    for p in bank
+                },
+            },
+            expanded=False,
+        )
+        st.caption("Computed from fixture inputs · symbolic-only fusion and selective policy")
+        metrics(result.decision, result, result.selected)
+        if result.selected:
+            st.write(f"Selected probe · {result.selected.template_id}")
+            st.latex(result.selected.question_latex)
+            st.caption("Choose a simulated response to the fixture probe.")
+            response_controls(result, demo=True)
+        elif result.decision.action == "TEACH":
+            lesson = build_lesson(question, result.decision)
+            if lesson:
+                st.write(lesson.family.rule)
+                st.latex(lesson.original.steps)
+                st.caption("Targeted practice · fixture")
+                st.latex(lesson.practice.question)
+            else:
+                st.caption("A verified lesson for this fixture question is unavailable.")
         else:
-            st.caption("Pending diagnostic integration")
-        entropy, gain, policy = st.columns(3)
-        entropy.metric("Entropy (bits)", decision.entropy_bits if decision else "Pending")
-        gain.metric("Expected information gain (bits)", probe.eig_bits if probe else "Pending")
-        policy.metric("Active policy", decision.action if decision else "Pending")
+            st.caption("ABSTAIN · targeted teaching withheld.")
 
 
 with st.sidebar:
@@ -331,5 +443,12 @@ with st.sidebar:
     st.markdown("**Team InferenceX**")
     st.caption("IIT Bombay Techfest")
 
+if "submission" in s and "replay_outputs" in s and "diagnosis" not in s:
+    result = diagnose(s.replay_outputs, s.get("probe_bank", ()))
+    if result is not None:
+        s.assessment = result
+        s.diagnosis = result.decision
+        s.probe = result.selected
+
 {PAGES[0]: workspace, PAGES[1]: review, PAGES[2]: practice}[page]()
-judge(s.get("diagnosis"), s.get("probe"))
+judge()
