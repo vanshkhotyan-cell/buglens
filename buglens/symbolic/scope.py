@@ -1,6 +1,4 @@
-from .ast import (
-    Num, Var, Neg, BinOp, Frac, EqNode
-)
+from .ast import Num, Var, Neg, BinOp, Frac, EqNode
 
 from ..schemas import BugID, ScopeResult
 
@@ -50,11 +48,7 @@ def check_binomial_square(node):
 
 def check_precedence(nodes):
 
-    operators = {
-        node.op
-        for node in nodes
-        if isinstance(node, BinOp)
-    }
+    operators = {node.op for node in nodes if isinstance(node, BinOp)}
 
     has_addition = bool(operators & {"+", "-"})
     has_multiplication = bool(operators & {"*", "/"})
@@ -65,14 +59,9 @@ def check_precedence(nodes):
 def check_negative_distribution(nodes):
 
     for node in nodes:
-
         # Example: -(a-b)
         if isinstance(node, Neg):
-
-            if (
-                isinstance(node.child, BinOp)
-                and node.child.op in ("+", "-")
-            ):
+            if isinstance(node.child, BinOp) and node.child.op in ("+", "-"):
                 return True
 
         # Example: 10-(4-1)
@@ -93,10 +82,7 @@ def is_constant(node):
         return True
 
     if isinstance(node, Frac):
-        return (
-            isinstance(node.num, Num)
-            and isinstance(node.den, Num)
-        )
+        return isinstance(node.num, Num) and isinstance(node.den, Num)
 
     return False
 
@@ -106,26 +92,11 @@ def check_transposition(node):
     if not isinstance(node, EqNode):
         return False
 
-    for side, other_side in (
-        (node.lhs, node.rhs),
-        (node.rhs, node.lhs)
-    ):
+    for side, other_side in ((node.lhs, node.rhs), (node.rhs, node.lhs)):
+        if isinstance(side, BinOp) and side.op in ("+", "-") and is_constant(other_side):
+            variable_constant = isinstance(side.left, Var) and is_constant(side.right)
 
-        if (
-            isinstance(side, BinOp)
-            and side.op in ("+", "-")
-            and is_constant(other_side)
-        ):
-
-            variable_constant = (
-                isinstance(side.left, Var)
-                and is_constant(side.right)
-            )
-
-            constant_variable = (
-                is_constant(side.left)
-                and isinstance(side.right, Var)
-            )
+            constant_variable = is_constant(side.left) and isinstance(side.right, Var)
 
             if variable_constant or constant_variable:
                 return True
@@ -160,41 +131,27 @@ def scope_gate(expression):
         eligible.append(BugID.B5_TRANSP_SIGN)
 
     if eligible:
-
         return ScopeResult(
             in_scope=True,
             eligible_families=tuple(eligible),
-            reason="Supported misconception pattern detected."
+            reason="Supported misconception pattern detected.",
         )
 
     return ScopeResult(
-        in_scope=False,
-        eligible_families=(),
-        reason="No supported misconception pattern detected."
+        in_scope=False, eligible_families=(), reason="No supported misconception pattern detected."
     )
 
 
 if __name__ == "__main__":
-
     from intake.parse import parse
 
-    examples = [
-        r"\frac{1}{2}+\frac{1}{3}",
-        "(a+b)^2",
-        "2+3*4",
-        "10-(4-1)",
-        "x+3=7",
-        "x+5"
-    ]
+    examples = [r"\frac{1}{2}+\frac{1}{3}", "(a+b)^2", "2+3*4", "10-(4-1)", "x+3=7", "x+5"]
 
     for example in examples:
-
         result = scope_gate(parse(example))
 
         print("Input:", example)
         print("In Scope:", result.in_scope)
-        print("Eligible:", [
-            bug.value for bug in result.eligible_families
-        ])
+        print("Eligible:", [bug.value for bug in result.eligible_families])
         print("Reason:", result.reason)
         print()

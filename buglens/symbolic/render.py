@@ -1,11 +1,9 @@
-from .ast import (
-    Num, Var, Neg, BinOp, Frac, EqNode
-)
+from .ast import Num, Var, Neg, BinOp, Frac, EqNode
+
 
 def get_precedence(node):
 
     if isinstance(node, BinOp):
-
         if node.op in ("+", "-"):
             return 1
 
@@ -35,18 +33,11 @@ def render_child(node, parent_op, side):
 
     child_precedence = get_precedence(node)
 
-    parent_precedence = {
-        "+": 1,
-        "-": 1,
-        "*": 2,
-        "**": 4,
-        "neg": 3
-    }[parent_op]
+    parent_precedence = {"+": 1, "-": 1, "*": 2, "**": 4, "neg": 3}[parent_op]
 
     need_brackets = child_precedence < parent_precedence
 
     if child_precedence == parent_precedence:
-
         if parent_op == "-" and side == "right":
             need_brackets = True
 
@@ -71,23 +62,17 @@ def _render(node):
         return node.name
 
     elif isinstance(node, Neg):
-
         child = render_child(node.child, "neg", "right")
 
         return "-" + child
 
     elif isinstance(node, Frac):
-
         numerator = _render(node.num)
         denominator = _render(node.den)
 
-        return (
-            r"\frac{" + numerator + "}{" +
-            denominator + "}"
-        )
+        return r"\frac{" + numerator + "}{" + denominator + "}"
 
     elif isinstance(node, BinOp):
-
         left = render_child(node.left, node.op, "left")
         right = render_child(node.right, node.op, "right")
 
@@ -104,7 +89,6 @@ def _render(node):
             return left + "^{" + _render(node.right) + "}"
 
     elif isinstance(node, EqNode):
-
         left = _render(node.lhs)
         right = _render(node.rhs)
 
@@ -119,19 +103,11 @@ def render_ast_latex(node):
 
 
 if __name__ == "__main__":
-
     from intake.parse import parse
 
-    tests = [
-        r"\frac{1}{2}",
-        "2 + 3 * 4",
-        "(x+1)^2",
-        "x + 5 = 12",
-        "-(a+b)"
-    ]
+    tests = [r"\frac{1}{2}", "2 + 3 * 4", "(x+1)^2", "x + 5 = 12", "-(a+b)"]
 
     for expression in tests:
-
         node = parse(expression)
 
         print("Input:", expression)

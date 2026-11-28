@@ -6,10 +6,7 @@ from .ast import Num, Var, Neg, BinOp, Frac, EqNode
 from ..schemas import ScopeOutException
 
 
-ALLOWED_NAMES = {
-    "x", "y", "z", "a", "b", "c",
-    "m", "n", "p", "q", "r", "t"
-}
+ALLOWED_NAMES = {"x", "y", "z", "a", "b", "c", "m", "n", "p", "q", "r", "t"}
 
 MAX_INPUT_LENGTH = 120
 MAX_EXPONENT = 4
@@ -17,34 +14,27 @@ MAX_EXPONENT = 4
 
 # Step 1: Check balanced brackets and braces
 
+
 def validate_balanced(text):
 
-    pairs = {
-        ")": "(",
-        "}": "{"
-    }
+    pairs = {")": "(", "}": "{"}
 
     stack = []
 
     for char in text:
-
         if char in "({":
             stack.append(char)
 
         elif char in ")}":
-
             if not stack or stack.pop() != pairs[char]:
-                raise ScopeOutException(
-                    "Unbalanced parentheses or braces"
-                )
+                raise ScopeOutException("Unbalanced parentheses or braces")
 
     if stack:
-        raise ScopeOutException(
-            "Unbalanced parentheses or braces"
-        )
+        raise ScopeOutException("Unbalanced parentheses or braces")
 
 
 # Step 2: Read balanced LaTeX groups
+
 
 def read_braced_group(text, start):
 
@@ -54,21 +44,20 @@ def read_braced_group(text, start):
     depth = 0
 
     for i in range(start, len(text)):
-
         if text[i] == "{":
             depth += 1
 
         elif text[i] == "}":
-
             depth -= 1
 
             if depth == 0:
-                return text[start + 1:i], i + 1
+                return text[start + 1 : i], i + 1
 
     raise ScopeOutException("Unclosed fraction brace")
 
 
 # Step 3: Normalize nested fractions
+
 
 def normalize_fractions(text):
 
@@ -76,9 +65,7 @@ def normalize_fractions(text):
     i = 0
 
     while i < len(text):
-
         if text.startswith(r"\frac", i):
-
             j = i + 5
 
             while j < len(text) and text[j].isspace():
@@ -94,14 +81,11 @@ def normalize_fractions(text):
             numerator = normalize_fractions(numerator)
             denominator = normalize_fractions(denominator)
 
-            output.append(
-                f"(({numerator})/({denominator}))"
-            )
+            output.append(f"(({numerator})/({denominator}))")
 
             i = j
 
         else:
-
             output.append(text[i])
             i += 1
 
@@ -109,6 +93,7 @@ def normalize_fractions(text):
 
 
 # Step 4: Normalize mathematical symbols
+
 
 def normalize_symbols(text):
 
@@ -143,8 +128,7 @@ def insert_implicit_multiplication(text):
     position = 0
 
     for match in TOKEN_PATTERN.finditer(text):
-
-        gap = text[position:match.start()]
+        gap = text[position : match.start()]
 
         if gap.strip():
             raise ScopeOutException("Unsupported character")
@@ -153,7 +137,6 @@ def insert_implicit_multiplication(text):
         value = match.group()
 
         if kind == "OP":
-
             if value == "(":
                 kind = "LPAREN"
 
@@ -161,16 +144,11 @@ def insert_implicit_multiplication(text):
                 kind = "RPAREN"
 
         if tokens:
-
             previous_kind = tokens[-1][0]
 
             should_insert = (
-                previous_kind in {"NUMBER", "NAME", "RPAREN"}
-                and kind in {"NAME", "LPAREN"}
-            ) or (
-                previous_kind == "RPAREN"
-                and kind == "NUMBER"
-            )
+                previous_kind in {"NUMBER", "NAME", "RPAREN"} and kind in {"NAME", "LPAREN"}
+            ) or (previous_kind == "RPAREN" and kind == "NUMBER")
 
             if should_insert:
                 tokens.append(("OP", "*"))
@@ -186,6 +164,7 @@ def insert_implicit_multiplication(text):
 
 # Step 6: Convert Python AST into our custom AST
 
+
 def translate_ast(node, depth=0):
 
     if depth > 40:
@@ -193,7 +172,6 @@ def translate_ast(node, depth=0):
 
     # Numbers
     if isinstance(node, py_ast.Constant):
-
         value = node.value
 
         if type(value) not in (int, float):
@@ -206,21 +184,15 @@ def translate_ast(node, depth=0):
 
     # Variables
     if isinstance(node, py_ast.Name):
-
         if node.id not in ALLOWED_NAMES:
-            raise ScopeOutException(
-                f"Unsupported variable: {node.id}"
-            )
+            raise ScopeOutException(f"Unsupported variable: {node.id}")
 
         return Var(node.id)
 
     # Negative and positive signs
     if isinstance(node, py_ast.UnaryOp):
-
         if isinstance(node.op, py_ast.USub):
-            return Neg(
-                translate_ast(node.operand, depth + 1)
-            )
+            return Neg(translate_ast(node.operand, depth + 1))
 
         elif isinstance(node.op, py_ast.UAdd):
             return translate_ast(node.operand, depth + 1)
@@ -229,7 +201,6 @@ def translate_ast(node, depth=0):
 
     # Mathematical operations
     if isinstance(node, py_ast.BinOp):
-
         left = translate_ast(node.left, depth + 1)
         right = translate_ast(node.right, depth + 1)
 
@@ -237,12 +208,7 @@ def translate_ast(node, depth=0):
         if isinstance(node.op, py_ast.Div):
             return Frac(left, right)
 
-        operator_map = {
-            py_ast.Add: "+",
-            py_ast.Sub: "-",
-            py_ast.Mult: "*",
-            py_ast.Pow: "**"
-        }
+        operator_map = {py_ast.Add: "+", py_ast.Sub: "-", py_ast.Mult: "*", py_ast.Pow: "**"}
 
         operator = operator_map.get(type(node.op))
 
@@ -251,7 +217,6 @@ def translate_ast(node, depth=0):
 
         # Exponent limit
         if isinstance(node.op, py_ast.Pow):
-
             exponent = node.right
 
             if not (
@@ -259,20 +224,16 @@ def translate_ast(node, depth=0):
                 and type(exponent.value) is int
                 and 0 <= exponent.value <= MAX_EXPONENT
             ):
-
-                raise ScopeOutException(
-                    f"Exponent must be between 0 and {MAX_EXPONENT}"
-                )
+                raise ScopeOutException(f"Exponent must be between 0 and {MAX_EXPONENT}")
 
         return BinOp(operator, left, right)
 
     # Everything else is rejected
-    raise ScopeOutException(
-        f"Unsupported syntax: {type(node).__name__}"
-    )
+    raise ScopeOutException(f"Unsupported syntax: {type(node).__name__}")
 
 
 # Step 7: Parse one mathematical expression
+
 
 def parse_side(expression):
 
@@ -281,22 +242,16 @@ def parse_side(expression):
     expression = insert_implicit_multiplication(expression)
 
     try:
-
-        parsed = py_ast.parse(
-            expression,
-            mode="eval"
-        )
+        parsed = py_ast.parse(expression, mode="eval")
 
     except (SyntaxError, ValueError, RecursionError) as error:
-
-        raise ScopeOutException(
-            f"Invalid expression: {error}"
-        ) from error
+        raise ScopeOutException(f"Invalid expression: {error}") from error
 
     return translate_ast(parsed.body)
 
 
 # Step 8: Main parser
+
 
 def parse(text):
 
@@ -324,7 +279,6 @@ def parse(text):
 
     # Equation handling
     if equality_count == 1:
-
         left, right = text.split("=")
 
         left = left.strip()
@@ -333,10 +287,7 @@ def parse(text):
         if not left or not right:
             raise ScopeOutException("Both equation sides are required")
 
-        return EqNode(
-            parse_side(left),
-            parse_side(right)
-        )
+        return EqNode(parse_side(left), parse_side(right))
 
     return parse_side(text.strip())
 
@@ -344,7 +295,6 @@ def parse(text):
 # Testing
 
 if __name__ == "__main__":
-
     tests = [
         "2 + 3 * 4",
         "2x",
@@ -355,11 +305,10 @@ if __name__ == "__main__":
         r"\frac{1}{2}",
         r"\frac{1}{2}+\frac{1}{3}",
         "x + 5 = 12",
-        "(x+1)^4"
+        "(x+1)^4",
     ]
 
     for expression in tests:
-
         print("Input:", expression)
         print("AST:", parse(expression))
         print()

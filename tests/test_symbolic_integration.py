@@ -17,7 +17,6 @@ passed = 0
 print("BUGLENS PACKAGE INTEGRATION TEST\n")
 
 for expression, bug_id, expected in test_cases:
-
     node = parse(expression)
 
     scope = scope_gate(node)
