@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "buglens"
-version = "0.0.1"
+version = "0.1.0"
 description = "brief description of Buglens"
 authors = [
   { name = "Vansh Khotyan" },
