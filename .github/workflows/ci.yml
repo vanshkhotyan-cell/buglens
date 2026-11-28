@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync locked environment
+        run: uv sync --locked
+      - name: Check formatting
+        run: uv run ruff format --check
+      - name: Run project tests
+        run: uv run pytest
+      - name: Run dependency vulnerability audit
+        run: uvx pip-audit
+      - name: Report DVC metrics diff on PRs
+        if: github.event_name == 'pull_request'
+        run: uv run dvc metrics diff --show-md main >> $GITHUB_STEP_SUMMARY || true
+      - name: Prune uv cache
+        run: uv cache prune --ci

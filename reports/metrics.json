@@ -1,0 +1,12 @@
+{
+  "mode": "symbolic_replay_mvp_alpha2_0",
+  "majority_baseline_macro_f1": 0.0833,
+  "macro_f1": 0.6471,
+  "top2_accuracy": 0.9259,
+  "ece_10bin": 0.1407,
+  "tau_teach": 0.3,
+  "teach_precision": 1.0,
+  "teach_coverage": 0.9259,
+  "probe_rate": 0.0,
+  "abstain_rate": 0.0741
+}
