@@ -142,9 +142,9 @@ def fit_pooling_weights(
 
     for _ in range(steps):
         log_scores = (
-            alphas * np.log(pi_0_cal + delta)
-            + alphas * np.log(p_sym_cal + delta)
-            + alphas * np.log(p_nn_cal + delta)
+            alphas[0] * np.log(pi_0_cal + delta)
+            + alphas[1] * np.log(p_sym_cal + delta)
+            + alphas[2] * np.log(p_nn_cal + delta)
         )
         probs = softmax(log_scores)
         grad = np.zeros(3, dtype=float)
@@ -155,7 +155,7 @@ def fit_pooling_weights(
             grad[k] = float(np.mean(expected_f - actual_f))
         alphas = np.maximum(0.0, alphas - lr * grad)
 
-    return float(alphas), float(alphas), float(alphas)
+    return float(alphas[0]), float(alphas[1]), float(alphas[2])
 
 
 def shannon_entropy_bits(probs: np.ndarray) -> float:
