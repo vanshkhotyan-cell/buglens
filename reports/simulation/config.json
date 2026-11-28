@@ -1,0 +1,43 @@
+{
+  "cohort": 100,
+  "sessions": 10,
+  "budget": 3,
+  "seeds": [
+    17,
+    41,
+    83
+  ],
+  "tutor": {
+    "initial": 0.5,
+    "s_bug": 0.1,
+    "g_bug": 0.1,
+    "p_learn": 0.3,
+    "p_relapse": 0.05
+  },
+  "scenarios": {
+    "baseline": {
+      "initial": 0.5,
+      "learn": 0.32,
+      "relapse": 0.04,
+      "concentration": 15,
+      "slip": 0.1,
+      "accidental_correct": 0.12
+    },
+    "high_relapse": {
+      "initial": 0.5,
+      "learn": 0.32,
+      "relapse": 0.12,
+      "concentration": 15,
+      "slip": 0.1,
+      "accidental_correct": 0.12
+    },
+    "noisy_responses": {
+      "initial": 0.5,
+      "learn": 0.32,
+      "relapse": 0.04,
+      "concentration": 15,
+      "slip": 0.22,
+      "accidental_correct": 0.25
+    }
+  }
+}
