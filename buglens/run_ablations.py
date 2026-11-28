@@ -118,13 +118,13 @@ def run_diagnosis_ablations(
 
     sym_only = np.vstack(
         [
-            log_linear_pool(pi_0, p_sym[i], None, (alphas, alphas, 0.0))
+            log_linear_pool(pi_0, p_sym[i], None, (alphas[0], alphas[1], 0.0))
             for i in range(len(eval_labels))
         ]
     )
     nn_only = np.vstack(
         [
-            log_linear_pool(pi_0, p_sym[i], p_nn[i], (alphas, 0.0, alphas))
+            log_linear_pool(pi_0, p_sym[i], p_nn[i], (alphas[0], 0.0, alphas[2]))
             for i in range(len(eval_labels))
         ]
     )

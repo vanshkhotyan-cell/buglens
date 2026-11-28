@@ -43,7 +43,7 @@ def apply_bug_plus_slip_perturbation(expr: str, rng: np.random.Generator) -> str
     if coeff_match:
         return expr[: coeff_match.start(1)] + expr[coeff_match.end(1) :]
 
-    match = tokens
+    match = tokens[0]
     val = int(match.group(0))
     return expr[: match.start()] + str(val + 1) + expr[match.end() :]
 
@@ -133,9 +133,9 @@ def fit_post_training_calibration(
 
     delta = 1e-6
     log_scores = (
-        alphas * np.log(pi_0_cal + delta)
-        + alphas * np.log(cal_p_sym + delta)
-        + alphas * np.log(cal_p_nn + delta)
+        alphas[0] * np.log(pi_0_cal + delta)
+        + alphas[1] * np.log(cal_p_sym + delta)
+        + alphas[2] * np.log(cal_p_nn + delta)
     )
     fused_cal = softmax(log_scores)
     tau_teach = sweep_teach_threshold(fused_cal, cal_labels, target_precision=target_precision)

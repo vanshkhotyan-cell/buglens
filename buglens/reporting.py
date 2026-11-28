@@ -64,7 +64,9 @@ class NumpyTfidfBaseline:
             for toks in tokenized:
                 for tok in set(toks):
                     df_counts[tok] = df_counts.get(tok, 0) + 1
-            top_toks = sorted(df_counts.items(), key=lambda kv: (-kv, kv))[: self.max_features]
+            top_toks = sorted(df_counts.items(), key=lambda kv: (-kv[1], kv[0]))[
+                : self.max_features
+            ]
             self.vocab = {tok: i for i, (tok, _) in enumerate(top_toks)}
             n_docs = len(texts)
             self.idf = np.array(
@@ -87,7 +89,7 @@ class NumpyTfidfBaseline:
     def fit(self, texts: list[str], labels: np.ndarray, num_classes: int = 6) -> None:
         x = self._featurize(texts, fit=True)
         y_onehot = np.eye(num_classes, dtype=float)[labels]
-        gram = x.T @ x + self.reg * np.eye(x.shape, dtype=float)
+        gram = x.T @ x + self.reg * np.eye(x.shape[1], dtype=float)
         self.weights = np.linalg.solve(gram, x.T @ y_onehot)
 
     def predict_proba(self, texts: list[str]) -> np.ndarray:
@@ -197,13 +199,13 @@ def run_all_baselines_and_ablations(
 
     sym_only = np.vstack(
         [
-            log_linear_pool(pi_0, p_sym_test[i], None, (alphas, alphas, 0.0))
+            log_linear_pool(pi_0, p_sym_test[i], None, (alphas[0], alphas[1], 0.0))
             for i in range(len(test_labels))
         ]
     )
     nn_only = np.vstack(
         [
-            log_linear_pool(pi_0, p_sym_test[i], p_nn_test[i], (alphas, 0.0, alphas))
+            log_linear_pool(pi_0, p_sym_test[i], p_nn_test[i], (alphas[0], 0.0, alphas[2]))
             for i in range(len(test_labels))
         ]
     )
